@@ -239,3 +239,25 @@ Erros retornam JSON padronizado:
 - `db.py` → conexão SQL Server e operações de dados.
 - `validacao.py` → validações de domínio auxiliares.
 - `tests/` → suíte de testes unitários/API.
+
+## Testes automatizados (pytest)
+
+Estrutura de testes em `tests/` com foco em:
+- validações puras (`validacao.py`),
+- builders e validações de SQL (`db.py`),
+- API `/status` (GET/POST/PUT com cenários felizes e inválidos),
+- evento Socket.IO (`status update`).
+
+### Execução local
+
+```bash
+pytest -q
+```
+
+### CI (GitHub Actions)
+
+Pipeline em `.github/workflows/tests.yml` executa automaticamente em `push` e `pull_request`:
+1. checkout do repositório,
+2. setup do Python 3.11,
+3. instalação de dependências,
+4. execução de `pytest -q`.
