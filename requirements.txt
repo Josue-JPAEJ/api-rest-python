@@ -10,3 +10,5 @@ gevent==23.9.1
 eventlet==0.33.3
 gevent-websocket==0.10.1
 python-json-logger==2.0.7
+pytest==8.3.5
+
