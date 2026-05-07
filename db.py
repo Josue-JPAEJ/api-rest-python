@@ -141,8 +141,8 @@ class DatabaseManager:
                 raise Exception(f"Erro ao executar SQL: {err}")
 
     def delete(self, table, iD):
-        sql = f"UPDATE {table} SET status = 4 WHERE id=id"
-        return self.execute(sql, {'id': iD})
+        sql = f"UPDATE {table} SET status = :status WHERE id = :id"
+        return self.execute(sql, {'status': 4, 'id': iD})
 
     def sql_general(self, consulta_sql: str, params=None):
         consulta_sql = ' '.join(consulta_sql.split())

@@ -83,6 +83,22 @@ def create_status():
     return jsonify({'message': 'Status criado com sucesso'}), 201
 
 
+
+
+@app.route('/status/<int:id>', methods=['DELETE'])
+def delete_status(id):
+    logging.info(f'DELETE /status/{id} called', extra={'request_id': g.get('request_id')})
+
+    if id <= 0:
+        raise ValidationError('ID deve ser um inteiro positivo.', 400, 'BAD_REQUEST')
+
+    rows_affected = manager.delete('status', id)
+    if rows_affected != 1:
+        raise ValidationError('Status não encontrado para o ID informado.', 404, 'NOT_FOUND')
+
+    socketio.emit('status update', {'message': 'Status removido com sucesso'}, broadcast=True)
+    logging.info('Status deleted successfully', extra={'request_id': g.get('request_id')})
+    return jsonify({'message': 'Status removido com sucesso'})
 @app.route('/status/<int:id>', methods=['PUT'])
 def update_status(id):
     logging.info(f'PUT /status/{id} called', extra={'request_id': g.get('request_id')})

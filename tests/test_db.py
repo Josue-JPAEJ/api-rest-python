@@ -1,7 +1,12 @@
 import os
 import unittest
+from contextlib import contextmanager
+from unittest.mock import patch
 
-from db import ConexaoDB, DatabaseConfigError
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+from db import ConexaoDB, DatabaseConfigError, DatabaseManager
 
 
 class TestConexaoDBConfig(unittest.TestCase):
@@ -23,6 +28,54 @@ class TestConexaoDBConfig(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+
+class TestDatabaseManagerDelete(unittest.TestCase):
+    def test_delete_usa_sql_parametrizada(self):
+        manager = DatabaseManager(conex=object())
+
+        with patch.object(manager, 'execute', return_value=1) as execute_mock:
+            manager.delete('status', 10)
+
+        execute_mock.assert_called_once_with(
+            'UPDATE status SET status = :status WHERE id = :id',
+            {'status': 4, 'id': 10},
+        )
+
+    def test_delete_altera_apenas_uma_linha_para_id_valido(self):
+        class SqliteConexao:
+            def __init__(self):
+                self.engine = create_engine('sqlite:///:memory:')
+                self.Session = sessionmaker(bind=self.engine)
+
+            @contextmanager
+            def conexao(self):
+                session = self.Session()
+                try:
+                    yield session
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
+                finally:
+                    session.close()
+
+        conex = SqliteConexao()
+        with conex.conexao() as session:
+            session.execute(text('CREATE TABLE status (id INTEGER PRIMARY KEY, status INTEGER NOT NULL)'))
+            session.execute(text('INSERT INTO status (id, status) VALUES (1, 1), (2, 1)'))
+
+        manager = DatabaseManager(conex=conex)
+        rows = manager.delete('status', 1)
+
+        self.assertEqual(rows, 1)
+
+        with conex.conexao() as session:
+            status_id_1 = session.execute(text('SELECT status FROM status WHERE id = 1')).scalar()
+            status_id_2 = session.execute(text('SELECT status FROM status WHERE id = 2')).scalar()
+
+        self.assertEqual(status_id_1, 4)
+        self.assertEqual(status_id_2, 1)
 
 
 if __name__ == '__main__':
