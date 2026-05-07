@@ -5,7 +5,7 @@ from flask import Flask, jsonify, request, g
 from flask_socketio import SocketIO
 from pythonjsonlogger import jsonlogger
 
-from db import ConexaoDB, DatabaseManager
+from db import ConexaoDB, DatabaseManager, DomainValidationError
 import validacao as validar
 
 
@@ -42,6 +42,18 @@ def handle_validation_error(err: ValidationError):
         'request_id': g.get('request_id'),
     }
     return jsonify(payload), err.status_code
+
+
+
+
+@app.errorhandler(DomainValidationError)
+def handle_domain_validation_error(err: DomainValidationError):
+    payload = {
+        'message': str(err),
+        'code': 'UNPROCESSABLE_ENTITY',
+        'request_id': g.get('request_id'),
+    }
+    return jsonify(payload), 422
 
 
 @app.errorhandler(Exception)

@@ -6,7 +6,7 @@ from unittest.mock import patch
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from db import ConexaoDB, DatabaseConfigError, DatabaseManager
+from db import ConexaoDB, DatabaseConfigError, DatabaseManager, DomainValidationError
 
 
 class TestConexaoDBConfig(unittest.TestCase):
@@ -76,6 +76,23 @@ class TestDatabaseManagerDelete(unittest.TestCase):
 
         self.assertEqual(status_id_1, 4)
         self.assertEqual(status_id_2, 1)
+
+
+class TestDatabaseManagerSecurity(unittest.TestCase):
+    def setUp(self):
+        self.manager = DatabaseManager(conex=object())
+
+    def test_rejeita_injection_em_table(self):
+        with self.assertRaises(DomainValidationError):
+            self.manager.select('status; DROP TABLE status')
+
+    def test_rejeita_where_texto_livre(self):
+        with self.assertRaises(DomainValidationError):
+            self.manager.select('status', where='1=1 OR 1=1')
+
+    def test_rejeita_injection_em_order_by(self):
+        with self.assertRaises(DomainValidationError):
+            self.manager.select('status', order_by='id; DROP TABLE status')
 
 
 if __name__ == '__main__':

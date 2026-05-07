@@ -23,6 +23,18 @@ class TestApiErrors(unittest.TestCase):
         self.assertNotIn('traceback', body)
         self.assertNotIn('exception', body)
 
+
+    def test_erro_dominio_retorna_422(self):
+        import main
+
+        with patch.object(main.manager, 'select', side_effect=main.DomainValidationError('identificador inválido')):
+            response = self.client.get('/status', headers={'X-Request-ID': 'req-422'})
+
+        self.assertEqual(response.status_code, 422)
+        body = response.get_json()
+        self.assertEqual(body['code'], 'UNPROCESSABLE_ENTITY')
+        self.assertEqual(body['request_id'], 'req-422')
+
     def test_erro_interno_retorna_500_sem_detalhes(self):
         import main
 
