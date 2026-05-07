@@ -95,5 +95,79 @@ class TestDatabaseManagerSecurity(unittest.TestCase):
             self.manager.select('status', order_by='id; DROP TABLE status')
 
 
+class _FakeResult:
+    rowcount = 1
+
+
+class _TrackingSession:
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.commit_count = 0
+        self.rollback_count = 0
+
+    def execute(self, *_args, **_kwargs):
+        if self.fail:
+            raise RuntimeError('falha de banco')
+        return _FakeResult()
+
+    def commit(self):
+        self.commit_count += 1
+
+    def rollback(self):
+        self.rollback_count += 1
+
+    def close(self):
+        pass
+
+
+class _TrackingConexao:
+    def __init__(self, fail=False):
+        self.session = _TrackingSession(fail=fail)
+
+    @contextmanager
+    def conexao(self):
+        session = self.session
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+
+class TestDatabaseManagerTransaction(unittest.TestCase):
+    def test_execute_faz_commit_unico_no_sucesso(self):
+        conex = _TrackingConexao(fail=False)
+        manager = DatabaseManager(conex=conex)
+
+        rows = manager.insert('status', {'id': 1, 'status': 1})
+
+        self.assertEqual(rows, 1)
+        self.assertEqual(conex.session.commit_count, 1)
+        self.assertEqual(conex.session.rollback_count, 0)
+
+    def test_execute_faz_rollback_unico_no_erro(self):
+        conex = _TrackingConexao(fail=True)
+        manager = DatabaseManager(conex=conex)
+
+        with self.assertRaises(Exception) as exc:
+            manager.update('status', 1, {'status': 2})
+
+        self.assertIn('Erro ao executar SQL', str(exc.exception))
+        self.assertEqual(conex.session.commit_count, 0)
+        self.assertEqual(conex.session.rollback_count, 1)
+
+    def test_delete_reutiliza_fluxo_transacional_execute(self):
+        conex = _TrackingConexao(fail=False)
+        manager = DatabaseManager(conex=conex)
+
+        manager.delete('status', 3)
+
+        self.assertEqual(conex.session.commit_count, 1)
+        self.assertEqual(conex.session.rollback_count, 0)
+
+
 if __name__ == '__main__':
     unittest.main()

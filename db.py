@@ -122,17 +122,15 @@ class DatabaseManager:
         return [self._validate_identifier(item, whitelist, kind) for item in identifiers]
 
     def execute(self, sql, params=None):
-        with self.conex.conexao() as session:
-            try:
+        try:
+            with self.conex.conexao() as session:
                 if params:
                     result = session.execute(text(sql), params)
                 else:
                     result = session.execute(text(sql))
-                session.commit()
                 return result.rowcount
-            except Exception as err:
-                session.rollback()
-                raise Exception(f"Erro ao executar SQL: {err}")
+        except Exception as err:
+            raise Exception(f"Erro ao executar SQL: {err}")
 
     def insert(self, table, column_values):
         table = self._validate_identifier(table, self.allowed_tables, 'table')
