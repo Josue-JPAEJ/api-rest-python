@@ -1,10 +1,10 @@
+import os
 import urllib.parse
-from sqlalchemy import text
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
 from contextlib import contextmanager
-import urllib
 from enum import Enum
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 
 class ConstraintProduto(Enum):
@@ -18,18 +18,66 @@ class ConstraintUsuario(Enum):
     SEXO = 'CK__usuario__sexo__625A9A57'
 
 
+_REQUIRED_ENV_VARS = (
+    'DB_SERVER',
+    'DB_NAME',
+    'DB_USER',
+    'DB_PASSWORD',
+)
+
+
+class DatabaseConfigError(ValueError):
+    """Erro de configuração de ambiente para conexão com banco."""
+
+
+def _require_env(var_name: str) -> str:
+    value = os.getenv(var_name)
+    if value is None or not value.strip():
+        raise DatabaseConfigError(
+            f"Variável de ambiente obrigatória ausente ou vazia: {var_name}. "
+            "Configure o ambiente antes de iniciar a aplicação."
+        )
+    return value.strip()
+
+
+def build_sqlserver_dsn() -> str:
+    """Monta o DSN ODBC para conexão com SQL Server a partir do ambiente."""
+    missing = [var for var in _REQUIRED_ENV_VARS if not os.getenv(var) or not os.getenv(var).strip()]
+    if missing:
+        missing_list = ', '.join(missing)
+        raise DatabaseConfigError(
+            f"Configuração de banco incompleta. Variáveis obrigatórias ausentes: {missing_list}."
+        )
+
+    driver = os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server').strip()
+    encrypt = os.getenv('DB_ENCRYPT', 'yes').strip()
+    trust_cert = os.getenv('DB_TRUST_CERT', 'no').strip()
+
+    server = _require_env('DB_SERVER')
+    database = _require_env('DB_NAME')
+    user = _require_env('DB_USER')
+    password = _require_env('DB_PASSWORD')
+
+    dsn = (
+        f"DRIVER={{{driver}}};"
+        f"SERVER={server};"
+        f"DATABASE={database};"
+        f"UID={user};"
+        f"PWD={password};"
+        f"Encrypt={encrypt};"
+        f"TrustServerCertificate={trust_cert};"
+        "Connection Timeout=30;"
+    )
+    return dsn
+
+
 class ConexaoDB:
     def __init__(self):
-        self.password = '{#128035#jpa&J};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;'
-        self.driver = '{ODBC Driver 17 for SQL Server};Server=tcp:serv-jlt.database.windows.net,' \
-                      '1433;Database=jlt_db;Uid=serv_admin;'
+        dsn = build_sqlserver_dsn()
         self.engine = create_engine(
-            'mssql+pyodbc:///?odbc_connect=' +
-            urllib.parse.quote_plus(
-                'DRIVER=' + self.driver +
-                'PWD=' + self.password
-            ),
-            pool_size=20, max_overflow=0
+            'mssql+pyodbc:///?odbc_connect=' + urllib.parse.quote_plus(dsn),
+            pool_size=20,
+            max_overflow=0,
         )
         self.session_factory = sessionmaker(bind=self.engine)
         self.Session = scoped_session(self.session_factory)
