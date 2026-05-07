@@ -93,6 +93,80 @@ class TestApiErrors(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
 
+    def test_payload_null_retorna_400(self):
+        response = self.client.post(
+            '/status',
+            data='null',
+            content_type='application/json',
+            headers={'X-Request-ID': 'req-null', 'X-User-Id': 'u-5', 'X-User-Role': 'status_editor'},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_payload_vazio_retorna_400(self):
+        response = self.client.post(
+            '/status',
+            json={},
+            headers={'X-Request-ID': 'req-empty', 'X-User-Id': 'u-6', 'X-User-Role': 'status_editor'},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_status_tipo_invalido_retorna_422(self):
+        response = self.client.post(
+            '/status',
+            json={'status': 123},
+            headers={'X-Request-ID': 'req-type', 'X-User-Id': 'u-7', 'X-User-Role': 'status_editor'},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_status_string_vazia_retorna_422(self):
+        response = self.client.post(
+            '/status',
+            json={'status': '   '},
+            headers={'X-Request-ID': 'req-blank', 'X-User-Id': 'u-8', 'X-User-Role': 'status_editor'},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_status_caracter_invalido_retorna_422(self):
+        response = self.client.post(
+            '/status',
+            json={'status': 'ATIVO-1'},
+            headers={'X-Request-ID': 'req-char', 'X-User-Id': 'u-9', 'X-User-Role': 'status_editor'},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_content_type_invalido_retorna_400(self):
+        response = self.client.post(
+            '/status',
+            data='{"status": "ATIVO"}',
+            content_type='text/plain',
+            headers={'X-Request-ID': 'req-ct', 'X-User-Id': 'u-10', 'X-User-Role': 'status_editor'},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_put_status_inexistente_retorna_404(self):
+        import main
+
+        with patch.object(main.manager, 'update', return_value=0):
+            response = self.client.put(
+                '/status/99',
+                json={'status': 'ATIVO'},
+                headers={'X-Request-ID': 'req-404', 'X-User-Id': 'u-11', 'X-User-Role': 'status_editor'},
+            )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_post_conflito_retorna_409(self):
+        import main
+
+        with patch.object(main.manager, 'insert', return_value=0):
+            response = self.client.post(
+                '/status',
+                json={'status': 'ATIVO'},
+                headers={'X-Request-ID': 'req-409', 'X-User-Id': 'u-12', 'X-User-Role': 'status_editor'},
+            )
+
+        self.assertEqual(response.status_code, 409)
+
 
 if __name__ == '__main__':
     unittest.main()

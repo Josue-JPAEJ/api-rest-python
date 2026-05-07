@@ -22,6 +22,40 @@ ROLE_STATUS_READ = 'status_reader'
 ROLE_STATUS_WRITE = 'status_editor'
 
 
+def validate_status_payload(payload, *, require_id=False, resource_id=None):
+    if require_id:
+        if not isinstance(resource_id, int) or resource_id <= 0:
+            raise ValidationError('ID deve ser um inteiro positivo.', 400, 'BAD_REQUEST')
+
+    if request.mimetype != 'application/json':
+        raise ValidationError('Content-Type deve ser application/json.', 400, 'BAD_REQUEST')
+
+    if payload is None:
+        raise ValidationError('Payload JSON inválido.', 400, 'BAD_REQUEST')
+
+    if not isinstance(payload, dict):
+        raise ValidationError('Payload deve ser um objeto JSON.', 400, 'BAD_REQUEST')
+
+    if 'status' not in payload:
+        raise ValidationError('Campo status é obrigatório.', 400, 'BAD_REQUEST')
+
+    status = payload['status']
+    if status is None:
+        raise ValidationError('Campo status não pode ser nulo.', 422, 'UNPROCESSABLE_ENTITY')
+
+    if not isinstance(status, str):
+        raise ValidationError('Campo status deve ser string.', 422, 'UNPROCESSABLE_ENTITY')
+
+    status = status.strip()
+    if not status:
+        raise ValidationError('Campo status não pode ser vazio.', 422, 'UNPROCESSABLE_ENTITY')
+
+    if not validar.somente_letras(status):
+        raise ValidationError('Status deve conter somente letras.', 422, 'UNPROCESSABLE_ENTITY')
+
+    return status.upper()
+
+
 def _extract_identity_from_headers():
     user_id = request.headers.get('X-User-Id')
     role = request.headers.get('X-User-Role')
@@ -126,14 +160,10 @@ def get_status():
 def create_status():
     logging.info('POST /status called', extra={'request_id': g.get('request_id')})
     data = request.get_json(silent=True)
-    status = (data or {}).get('status')
+    status = validate_status_payload(data)
 
-    if not status:
-        raise ValidationError('Campo status é obrigatório.', 400, 'BAD_REQUEST')
-    if not validar.somente_letras(status):
-        raise ValidationError('Status deve conter somente letras.', 422, 'UNPROCESSABLE_ENTITY')
-
-    manager.insert('status', {'status': str(status).strip().upper()})
+    if manager.insert('status', {'status': status}) != 1:
+        raise ValidationError('Conflito ao criar status.', 409, 'CONFLICT')
     socketio.emit('status update', {'message': 'Status criado com sucesso'}, broadcast=True)
     logging.info('Status created successfully', extra={'request_id': g.get('request_id'), 'user_id': g.get('user_id'), 'action': 'create_status'})
     return jsonify({'message': 'Status criado com sucesso'}), 201
@@ -161,17 +191,12 @@ def delete_status(id):
 def update_status(id):
     logging.info(f'PUT /status/{id} called', extra={'request_id': g.get('request_id')})
     data = request.get_json(silent=True)
-    status = (data or {}).get('status')
+    status = validate_status_payload(data, require_id=True, resource_id=id)
 
-    if id <= 0:
-        raise ValidationError('ID deve ser um inteiro positivo.', 400, 'BAD_REQUEST')
-    if not status:
-        raise ValidationError('Campo status é obrigatório.', 400, 'BAD_REQUEST')
-    if not validar.somente_letras(status):
-        raise ValidationError('Status deve conter somente letras.', 422, 'UNPROCESSABLE_ENTITY')
-
-    column_values = {'status': str(status).strip().upper()}
-    manager.update('status', id, column_values)
+    column_values = {'status': status}
+    rows_affected = manager.update('status', id, column_values)
+    if rows_affected != 1:
+        raise ValidationError('Status não encontrado para o ID informado.', 404, 'NOT_FOUND')
     socketio.emit('status update', {'message': 'Status atualizado com sucesso'}, broadcast=True)
     logging.info('Status updated successfully', extra={'request_id': g.get('request_id'), 'user_id': g.get('user_id'), 'action': 'update_status'})
     return jsonify({'message': 'Status atualizado com sucesso'})
